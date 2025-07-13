@@ -1,0 +1,209 @@
+version: '3.8'
+
+services:
+  # FastAPI Development Server
+  flasx-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        - INSTALL_DEV=true
+    image: flasx:dev
+    container_name: flasx-development
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - RELOAD=true
+      - SQLDB_URL=sqlite+aiosqlite:///./data/database.db
+      - SQL_CONNECTION_STRING=sqlite+aiosqlite:///./data/database.db
+      - LOG_LEVEL=DEBUG
+    volumes:
+      # Mount source code for hot reloading
+      - .:/home/app/code:rw
+      - ./data:/home/app/data:rw
+      - ./logs:/home/app/logs:rw
+
+      # Persist virtual environment and cache
+      - dev_venv:/home/app/venv
+      - dev_cache:/home/app/.cache
+    working_dir: /home/app/code
+    command: >
+      bash -c "
+        cd /home/app/code &&
+        poetry install --no-interaction &&
+        poetry run fastapi dev flasx/main.py --host 0.0.0.0 --port 8000 --reload
+      "
+    depends_on:
+      - db
+    networks:
+      - flasx-dev-network
+
+  # PostgreSQL Database for Development
+  postgresqldb:
+    image: postgres:15-alpine
+    container_name: flasx-postgres-dev
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: flasx_dev
+      POSTGRES_USER: flasx_user
+      POSTGRES_PASSWORD: flasx_password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - flasx-dev-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U flasx_user -d flasx_dev" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # pgAdmin for Database Management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: flasx-pgadmin-dev
+    restart: unless-stopped
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@flasx.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin_dev_data:/var/lib/pgadmin
+    depends_on:
+      - db
+    networks:
+      - flasx-dev-network
+    profiles:
+      - tools
+
+  # Redis Commander for Redis Management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: flasx-redis-commander-dev
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      REDIS_HOSTS: local:redis:6379
+      HTTP_USER: admin
+      HTTP_PASSWORD: admin123
+    depends_on:
+      - redis
+    networks:
+      - flasx-dev-network
+    profiles:
+      - tools
+
+  # Mailhog for Email Testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: flasx-mailhog-dev
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # Web UI
+    networks:
+      - flasx-dev-network
+    profiles:
+      - tools
+
+  # Prometheus for Development Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: flasx-prometheus-dev
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus-dev.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_dev_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - flasx-dev-network
+    profiles:
+      - monitoring
+
+  # Grafana for Metrics Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: flasx-grafana-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: false
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_dev_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - flasx-dev-network
+    profiles:
+      - monitoring
+
+  # Test Runner Service
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        - INSTALL_DEV=true
+    image: flasx:dev
+    container_name: flasx-test-runner
+    volumes:
+      - .:/home/app/code:rw
+      - dev_venv:/home/app/venv
+      - test_reports:/home/app/test-reports
+    working_dir: /home/app/code
+    environment:
+      - ENVIRONMENT=test
+      - SQLDB_URL=sqlite+aiosqlite:///./test_database.db
+      - SQL_CONNECTION_STRING=sqlite+aiosqlite:///./test_database.db
+    command: >
+      bash -c "
+        cd /home/app/code &&
+        poetry install --no-interaction &&
+        python -m pytest tests/ -v --cov=flasx --cov-report=html:/home/app/test-reports/coverage --cov-report=term
+      "
+    networks:
+      - flasx-dev-network
+    profiles:
+      - test
+
+# Named volumes for persistent data
+volumes:
+  postgres_dev_data:
+    driver: local
+  pgadmin_dev_data:
+    driver: local
+  dev_venv:
+    driver: local
+  dev_cache:
+    driver: local
+  test_reports:
+    driver: local
+
+# Development network
+networks:
+  flasx-dev-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/16

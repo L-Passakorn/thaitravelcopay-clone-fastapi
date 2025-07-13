@@ -1,0 +1,62 @@
+# Development files
+.devcontainer/
+.vscode/
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Testing
+tests/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Development environment
+.env.dev
+.env.test
+.env.local
+
+# Node modules (if any)
+node_modules/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+.tmp/
+*.tmp
+*.temp
+
+# IDE files
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Database files (production will use mounted volumes)
+*.db
+*.sqlite
+*.sqlite3
+database.db

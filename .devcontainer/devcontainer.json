@@ -1,0 +1,93 @@
+{
+    "name": "FLASX Dev Container",
+    "dockerComposeFile": [
+        "docker-compose.yml"
+    ],
+    "service": "app",
+    "workspaceFolder": "/home/app/code",
+    "shutdownAction": "stopCompose",
+    "containerEnv": {
+        "PATH": "/home/app/venv/bin:${PATH}",
+        "VIRTUAL_ENV": "/home/app/venv",
+        "PYTHONPATH": "/home/app/code",
+        "ENVIRONMENT": "development",
+        "DEBUG": "true",
+        "LOG_LEVEL": "DEBUG"
+    },
+    "remoteUser": "app",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.pylint",
+                "ms-python.black-formatter",
+                "ms-python.isort",
+                "ms-python.mypy-type-checker",
+                "ms-python.debugpy",
+                "ms-toolsai.jupyter",
+                "ms-vscode.vscode-json",
+                "ms-azuretools.vscode-docker",
+                "github.copilot",
+                "github.copilot-chat",
+                "redhat.vscode-yaml",
+                "tamasfe.even-better-toml",
+                "charliermarsh.ruff"
+            ],
+            "settings": {
+                "python.pythonPath": "/home/app/venv/bin/python3",
+                "python.defaultInterpreterPath": "/home/app/venv/bin/python3",
+                "python.formatting.provider": "black",
+                "python.linting.enabled": true,
+                "python.linting.pylintEnabled": true,
+                "python.testing.pytestEnabled": true,
+                "python.testing.pytestArgs": [
+                    "tests"
+                ],
+                "python.testing.autoTestDiscoverOnSaveEnabled": true,
+                "python.testing.unittestEnabled": false,
+                "editor.formatOnSave": true,
+                "editor.codeActionsOnSave": {
+                    "source.organizeImports": "explicit"
+                },
+                "python.terminal.activateEnvironment": false,
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "files.watcherExclude": {
+                    "**/node_modules/**": true,
+                    "**/.git/objects/**": true,
+                    "**/.git/subtree-cache/**": true,
+                    "**/data/**": true,
+                    "**/logs/**": true,
+                    "**/__pycache__/**": true,
+                    "**/.*cache/**": true
+                }
+            }
+        }
+    },
+    "forwardPorts": [
+        8000,
+        5432,
+        6379
+    ],
+    "portsAttributes": {
+        "8000": {
+            "label": "FastAPI App",
+            "onAutoForward": "notify"
+        },
+        "5432": {
+            "label": "PostgreSQL",
+            "onAutoForward": "silent"
+        },
+        "6379": {
+            "label": "Redis",
+            "onAutoForward": "silent"
+        }
+    },
+    "postCreateCommand": "bash -c 'cd /home/app/code && mkdir -p data logs && poetry install --no-interaction'",
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {},
+        "ghcr.io/devcontainers/features/github-cli:1": {},
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    },
+    "initializeCommand": "mkdir -p ${localWorkspaceFolder}/data ${localWorkspaceFolder}/logs",
+    "updateContentCommand": "poetry install --no-interaction"
+}

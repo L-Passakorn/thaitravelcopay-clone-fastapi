@@ -1,0 +1,61 @@
+FROM debian:trixie-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    PATH="/home/app/venv/bin:$PATH"
+
+# Install system dependencies for development
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    build-essential \
+    git \
+    vim \
+    nano \
+    curl \
+    wget \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user
+RUN useradd --create-home --shell /bin/bash app
+
+# Set working directory
+WORKDIR /home/app
+
+# Create virtual environment
+RUN python3 -m venv /home/app/venv
+
+# Activate virtual environment and install poetry
+RUN /home/app/venv/bin/pip install --upgrade pip && /home/app/venv/bin/pip install poetry
+
+# Copy poetry files
+COPY --chown=app:app pyproject.toml poetry.lock* ./
+
+# Configure poetry to not create virtual environments (we already have one)
+RUN /home/app/venv/bin/poetry config virtualenvs.create false
+
+# Install dependencies including dev dependencies for development (without the current project)
+RUN /home/app/venv/bin/poetry install --no-root
+
+# Copy application code
+COPY --chown=app:app . .
+
+# Install the current project in development mode
+RUN /home/app/venv/bin/poetry install
+
+# Change ownership of the entire directory to app user
+RUN chown -R app:app /home/app
+
+# Switch to non-root user
+USER app
+
+# Expose port
+EXPOSE 8000
+
+# Default command for development (can be overridden)
+CMD ["/bin/bash"]

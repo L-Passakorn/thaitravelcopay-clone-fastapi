@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  flasx-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    image: flasx:latest
+    container_name: flasx-production
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - SQLDB_URL=sqlite+aiosqlite:///./data/database.db
+      - SQL_CONNECTION_STRING=sqlite+aiosqlite:///./data/database.db
+    volumes:
+      - ./data:/app/data:rw
+      - ./logs:/app/logs:rw
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=10)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=100M
+    networks:
+      - flasx-network
+
+networks:
+  flasx-network:
+    driver: bridge
+
+volumes:
+  flasx-data:
+  driver: local

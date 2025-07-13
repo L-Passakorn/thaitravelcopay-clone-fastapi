@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  # FastAPI Development App for Dev Container
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile.dev
+      args:
+        - INSTALL_DEV=true
+    volumes:
+      - ..:/home/app/code:cached
+      - flasx-dev-venv:/home/app/venv
+      - flasx-dev-cache:/home/app/.cache
+    working_dir: /home/app/code
+    command: sleep infinity
+    environment:
+      - PYTHONPATH=/home/app/code
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - DATABASE_URL=postgresql+asyncpg://flasx_user:flasx_password@postgres:5432/flasx_dev
+      - SQLDB_URL=postgresql+asyncpg://flasx_user:flasx_password@postgres:5432/flasx_dev
+      - SQL_CONNECTION_STRING=postgresql+asyncpg://flasx_user:flasx_password@postgres:5432/flasx_dev
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8000:8000"
+
+  # PostgreSQL Database for Dev Container
+  postgres:
+    image: postgres:15-alpine
+    container_name: flasx-devcontainer-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: flasx_dev
+      POSTGRES_USER: flasx_user
+      POSTGRES_PASSWORD: flasx_password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - postgres_devcontainer_data:/var/lib/postgresql/data
+      - ../scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U flasx_user -d flasx_dev" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for Dev Container
+  redis:
+    image: redis:7-alpine
+    container_name: flasx-devcontainer-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_devcontainer_data:/data
+      - ../config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_devcontainer_data:
+    driver: local
+  redis_devcontainer_data:
+    driver: local
+  flasx-dev-venv:
+    driver: local
+  flasx-dev-cache:
+    driver: local
+
+networks:
+  default:
+    name: flasx-devcontainer-network
