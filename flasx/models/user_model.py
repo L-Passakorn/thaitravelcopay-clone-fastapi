@@ -13,9 +13,11 @@ import bcrypt
 class BaseUser(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
     email: str = pydantic.Field(json_schema_extra=dict(example="admin@email.local"))
-    username: str = pydantic.Field(json_schema_extra=dict(example="admin"))
-    first_name: str = pydantic.Field(json_schema_extra=dict(example="Firstname"))
-    last_name: str = pydantic.Field(json_schema_extra=dict(example="Lastname"))
+    citizen_id: str = pydantic.Field(json_schema_extra=dict(example="1234567890123"))
+    first_name: str = pydantic.Field(json_schema_extra=dict(example="John"))
+    last_name: str = pydantic.Field(json_schema_extra=dict(example="Doe"))
+    phone_number: str = pydantic.Field(json_schema_extra=dict(example="0801234567"))
+    current_address: str = pydantic.Field(json_schema_extra=dict(example="Bangkok"))
 
 
 class User(BaseUser):
@@ -60,7 +62,7 @@ class RegisteredUser(BaseUser):
 
 
 class UpdatedUser(BaseUser):
-    roles: list[str]
+    pass  # Remove roles field since it's not defined in BaseUser
 
 
 class Token(BaseModel):
@@ -82,18 +84,13 @@ class ChangedPasswordUser(BaseModel):
 class DBUser(BaseUser, SQLModel, table=True):
     __tablename__ = "users"
     id: int | None = Field(default=None, primary_key=True)
-
     password: str
+    phone_number: str
+    current_address: str
 
     register_date: datetime.datetime = Field(default_factory=datetime.datetime.now)
     updated_date: datetime.datetime = Field(default_factory=datetime.datetime.now)
     last_login_date: datetime.datetime | None = Field(default=None)
-
-    async def has_roles(self, roles):
-        for role in roles:
-            if role in self.roles:
-                return True
-        return False
 
     async def get_encrypted_password(self, plain_password):
         return bcrypt.hashpw(

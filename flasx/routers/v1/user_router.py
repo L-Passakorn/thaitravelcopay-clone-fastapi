@@ -37,22 +37,35 @@ async def create(
     session: Annotated[AsyncSession, Depends(models.get_session)],
 ) -> models.User:
 
+    # Check if citizen_id already exists
     result = await session.exec(
-        select(models.DBUser).where(models.DBUser.username == user_info.username)
+        select(models.DBUser).where(models.DBUser.citizen_id == user_info.citizen_id)
     )
-
     user = result.one_or_none()
 
     if user:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="This username is exists.",
+            detail="This citizen ID already exists.",
         )
 
-    user = models.DBUser.from_orm(user_info)
+    # Check if email already exists
+    result = await session.exec(
+        select(models.DBUser).where(models.DBUser.email == user_info.email)
+    )
+    existing_email = result.one_or_none()
+
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This email already exists.",
+        )
+
+    user = models.DBUser.model_validate(user_info)
     await user.set_password(user_info.password)
     session.add(user)
     await session.commit()
+    await session.refresh(user)
 
     return user
 
@@ -63,25 +76,27 @@ async def change_password(
     password_update: models.ChangedPassword,
     session: Annotated[AsyncSession, Depends(models.get_session)],
     current_user: models.User = Depends(deps.get_current_user),
-) -> dict():
+) -> dict:
 
-    result = await session.get(models.DBUser, user_id)
+    user = await session.get(models.DBUser, user_id)
 
-    if user:
+    if not user:
         raise HTTPException(
-            status_code=HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Not found this user",
         )
 
-    if not user.verify_password(password_update.current_password):
+    if not await user.verify_password(password_update.current_password):
         raise HTTPException(
-            status_code=HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect password",
         )
 
-    user.set_password(password_update.new_password)
+    await user.set_password(password_update.new_password)
     session.add(user)
     await session.commit()
+    
+    return {"message": "Password changed successfully"}
 
 
 @router.put("/{user_id}/update")
@@ -89,24 +104,22 @@ async def update(
     request: Request,
     user_id: str,
     user_update: models.UpdatedUser,
+    session: Annotated[AsyncSession, Depends(models.get_session)],
     current_user: models.User = Depends(deps.get_current_user),
 ) -> models.User:
 
     db_user = await session.get(models.DBUser, user_id)
 
-    if db_user:
+    if not db_user:
         raise HTTPException(
-            status_code=HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Not found this user",
         )
 
-    if not db_user.verify_password(password_update.current_password):
-        raise HTTPException(
-            status_code=HTTP_401_UNAUTHORIZED,
-            detail="Incorrect password",
-        )
-
-    db_user.sqlmodel_update(user_update)
+    # Update user fields
+    for field, value in user_update.model_dump(exclude_unset=True).items():
+        setattr(db_user, field, value)
+    
     session.add(db_user)
     await session.commit()
     await session.refresh(db_user)

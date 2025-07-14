@@ -20,44 +20,41 @@ router = APIRouter(tags=["authentication"])
 settings = config.get_settings()
 
 
-@router.post(
-    "/token",
-)
+@router.post("/token")
 async def authentication(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     session: Annotated[models.AsyncSession, Depends(models.get_session)],
 ) -> models.Token:
     print("form_data", form_data)
 
+    # Try to find user by citizen_id first
     result = await session.exec(
-        select(models.DBUser).where(models.DBUser.username == form_data.username)
+        select(models.DBUser).where(models.DBUser.citizen_id == form_data.username)
     )
-
-    print("result", result)
-
     user = result.one_or_none()
 
+    # If not found, try to find by phone_number
     if not user:
         result = await session.exec(
-            select(models.DBUser).where(models.DBUser.email == form_data.username)
+            select(models.DBUser).where(models.DBUser.phone_number == form_data.username)
         )
         user = result.one_or_none()
+
     print("user", user)
 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect citizen ID/phone number or password",
         )
 
     if not await user.verify_password(form_data.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect citizen ID/phone number or password",
         )
 
     user.last_login_date = datetime.datetime.now()
-
     session.add(user)
     await session.commit()
     await session.refresh(user)
